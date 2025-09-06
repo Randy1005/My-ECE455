@@ -8,6 +8,5 @@
 
 cd $SLURM_SUBMIT_DIR
 module load nvidia/cuda
-nvcc matmul_unrolled.cu -o matmul_unrolled
-./matmul_unrolled
-
+nvcc matmul_unroll.cu -o matmul_unroll
+./matmul_unroll
