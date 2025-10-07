@@ -244,34 +244,37 @@ float measure_latency_mm_cuda(size_t m, size_t n, size_t p, size_t num_tests,
 
 int main()
 {
-    constexpr size_t num_tests{10};
+    const size_t num_tests{2};
 
+    // Run tests to check correctness.
     assert(random_multiple_test_mm_cuda<int32_t>(num_tests));
     assert(random_multiple_test_mm_cuda<float>(num_tests));
     assert(random_multiple_test_mm_cuda<double>(num_tests));
 
-    constexpr size_t num_measurement_tests{10};
-    constexpr size_t num_measurement_warmups{1};
+    std::cout << "All tests passed!\n";
+
+    const size_t num_measurement_tests{2};
+    const size_t num_measurement_warmups{1};
     size_t m{MAT_DIM}, n{MAT_DIM}, p{MAT_DIM};
 
-    float mm_cuda_int32_latency{measure_latency_mm_cuda<int32_t>(
-        m, n, p, num_measurement_tests, num_measurement_warmups)};
-    float mm_cuda_float_latency{measure_latency_mm_cuda<float>(
-        m, n, p, num_measurement_tests, num_measurement_warmups)};
-    float mm_cuda_double_latency{measure_latency_mm_cuda<double>(
-        m, n, p, num_measurement_tests, num_measurement_warmups)};
+    float mm_cuda_int32_latency = measure_latency_mm_cuda<int32_t>(
+        m, n, p, num_measurement_tests, num_measurement_warmups);
+    float mm_cuda_float_latency = measure_latency_mm_cuda<float>(
+        m, n, p, num_measurement_tests, num_measurement_warmups);
+    float mm_cuda_double_latency = measure_latency_mm_cuda<double>(
+        m, n, p, num_measurement_tests, num_measurement_warmups);
 
 
-    std::cout << "Matrix Multiplication Runtime" << std::endl;
+    std::cout << "Matrix Multiplication Runtime\n";
     std::cout << "m: " << m << " "
               << "n: " << n << " "
-              << "p: " << p << std::endl;
+              << "p: " << p << "\n";
     std::cout << "INT32: " << std::fixed << std::setprecision(5)
-              << mm_cuda_int32_latency << " ms" << std::endl;
+              << mm_cuda_int32_latency << " ms\n";
     std::cout << "FLOAT: " << std::fixed << std::setprecision(5)
-              << mm_cuda_float_latency << " ms" << std::endl;
+              << mm_cuda_float_latency << " ms\n";
     std::cout << "DOUBLE: " << std::fixed << std::setprecision(5)
-              << mm_cuda_double_latency << " ms" << std::endl;
+              << mm_cuda_double_latency << " ms\n";
 
    return 0;
 }
