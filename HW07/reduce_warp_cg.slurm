@@ -1,0 +1,14 @@
+#!/usr/bin/env zsh
+#SBATCH --partition=instruction
+#SBATCH --time=00:02:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=1
+#SBATCH --gpus-per-task=1
+#SBATCH --output=reduce_warp_cg.output
+
+cd $SLURM_SUBMIT_DIR
+module load nvidia/cuda
+
+# Compile and run the cooperative groups warp-level reduction
+nvcc -O3 reduce_warp_cg.cu -o reduce_warp_cg
+./reduce_warp_cg
