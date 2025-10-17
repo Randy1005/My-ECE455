@@ -9,6 +9,6 @@
 cd $SLURM_SUBMIT_DIR
 module load nvidia/cuda
 
-# Compile and run the cooperative groups warp-level reduction
-nvcc -O3 reduce_warp_cg.cu -o reduce_warp_cg
+# Compile with modern C++ standard (required for CUDA 13+ cooperative_groups)
+nvcc -O3 -std=c++17 reduce_warp_cg.cu -o reduce_warp_cg
 ./reduce_warp_cg
