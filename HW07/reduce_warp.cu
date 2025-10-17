@@ -4,17 +4,14 @@
 #include <cassert>
 #include <iomanip>
 #include <chrono>
-#include <cooperative_groups.h>
-
-namespace cg = cooperative_groups;
 
 #define BLOCK_DIM 256
-#define N (1 << 24)   // 16,777,216 elements (~64 MB of ints)
+#define N (1 << 24)  // 16,777,216 elements
 #define WARP_SIZE 32
 
 // ---------- CUDA Error Checking ----------
 #define checkCuda(val) check((val), #val, __FILE__, __LINE__)
-void check(cudaError_t err, const char* const func, const char* const file, const int line) {
+void check(cudaError_t err, const char* const func, const char* const file, int line) {
     if (err != cudaSuccess) {
         std::cerr << "CUDA Error at " << file << ":" << line << " — "
                   << cudaGetErrorString(err) << " (" << func << ")" << std::endl;
@@ -41,35 +38,29 @@ int reduce_host(const std::vector<int>& data) {
     return static_cast<int>(sum);
 }
 
-// ---------- Warp Reduction using Cooperative Groups ----------
-__device__ int warp_reduce_sum(cg::thread_block_tile<WARP_SIZE> warp, int val) {
-    // Iteratively reduce values within a warp
-    for (int offset = warp.size() / 2; offset > 0; offset /= 2)
-        val += warp.shfl_down(val, offset);
-
-    // No warp.sync() needed here — all threads in the warp execute in lockstep.
-    // Add warp.sync() if using divergent branches or shared memory between steps.
+// ---------- Warp Reduction (using __shfl_down_sync) ----------
+__device__ int warp_reduce_sum(int val) {
+    // FULL_MASK = 0xFFFFFFFF means all threads in the warp participate
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2)
+        val += __shfl_down_sync(0xFFFFFFFF, val, offset);
     return val;
 }
 
 // ---------- GPU Kernel ----------
-__global__ void reduce_warp_cg(const int* in, int* out, size_t n_elems) {
-    cg::thread_block block = cg::this_thread_block();
-    cg::thread_block_tile<WARP_SIZE> warp = cg::tiled_partition<WARP_SIZE>(block);
-
+__global__ void reduce_warp(const int* in, int* out, size_t n_elems) {
     unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int val = (idx < n_elems) ? in[idx] : 0;
 
-    // Warp-level reduction (within 32 threads)
-    int warp_sum = warp_reduce_sum(warp, val);
+    // Warp-level reduction
+    val = warp_reduce_sum(val);
 
-    // One thread per warp accumulates partial result to global memory
-    if (warp.thread_rank() == 0)
-        atomicAdd(out, warp_sum);
+    // Write one partial result per warp
+    if (threadIdx.x % WARP_SIZE == 0)
+        atomicAdd(out, val);
 }
 
 // ---------- GPU Launcher ----------
-int reduce_cuda_warp_cg(const std::vector<int>& h_in, float& time_ms) {
+int reduce_cuda_warp(const std::vector<int>& h_in, float& time_ms) {
     int *d_in, *d_out;
     int h_out = 0;
 
@@ -86,7 +77,7 @@ int reduce_cuda_warp_cg(const std::vector<int>& h_in, float& time_ms) {
     checkCuda(cudaEventCreate(&stop));
 
     checkCuda(cudaEventRecord(start));
-    reduce_warp_cg<<<blocks, threads>>>(d_in, d_out, N);
+    reduce_warp<<<blocks, threads>>>(d_in, d_out, N);
     checkCuda(cudaEventRecord(stop));
     checkCuda(cudaEventSynchronize(stop));
     checkCuda(cudaEventElapsedTime(&time_ms, start, stop));
@@ -103,7 +94,7 @@ int reduce_cuda_warp_cg(const std::vector<int>& h_in, float& time_ms) {
 
 // ---------- Main ----------
 int main() {
-    std::cout << "Running Warp-Level Reduction (Cooperative Groups, N = " << N << ")..." << std::endl;
+    std::cout << "Running Warp-Level Reduction (using __shfl_down_sync, N = " << N << ")...\n";
 
     std::vector<int> h_in = create_rand_vector(N);
 
@@ -117,7 +108,7 @@ int main() {
 
     // ---- GPU reduction ----
     float gpu_time = 0.0f;
-    int gpu_result = reduce_cuda_warp_cg(h_in, gpu_time);
+    int gpu_result = reduce_cuda_warp(h_in, gpu_time);
 
     // ---- Validation ----
     bool ok = (ref == gpu_result);
